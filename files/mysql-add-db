@@ -1,0 +1,125 @@
+#!/bin/sh
+
+set -e
+
+#
+#   Display help
+#
+help()
+{
+cat <<EOF
+$PROGNAME : [OPTIONS]
+  --create  dbname          Create database
+  --delete  dbname          Delete Database
+  --grant   user            Give user grant on the database
+  --help                    Print this
+
+EOF
+}
+
+
+
+CHARACTER='utf8'
+
+# Parse command line
+while [ "$#" -gt 0 ] ; do
+    case $1 in
+        --help)
+            help
+            exit 0
+            ;;
+        --create)
+			ACTION="create"
+			DB_NAME=$2
+            shift
+			if [ -z "$DB_NAME" ]; then
+				echo "You must specify a dbname when using --create"
+				exit 1
+			fi
+			;;
+        --delete)
+			ACTION="delete"
+			DB_NAME=$2
+            shift
+			if [ -z "$DB_NAME" ]; then
+				echo "You must specify a dbname when using --delete"
+				exit 1
+			fi
+			;;
+        --grant)
+			USER_NAME=$2
+            shift
+			if [ -z "$USER_NAME" ]; then
+				echo "You must specify a user when using --grant"
+				exit 1
+			fi
+			;;
+		*)
+            echo "Unknown option '$1'"
+            exit 1
+            ;;
+    esac
+    shift
+done
+
+
+# Check action and password for root
+if [ -z $ACTION ]; then
+	echo "You must choose an action"
+    help
+	exit 1
+fi
+
+
+# Check existence
+# mysql -e 'SHOW DATABASES LIKE \"${title}\"' -uroot -p`cat /root/.passwd/db/mysql` | grep -q ${title}
+COMMAND="SHOW DATABASES LIKE \"$DB_NAME\""
+
+set +e
+mysql-do $COMMAND | grep -q "$DB_NAME"
+if [ $? -eq 0 ]; then
+    EXIST=1
+else
+    EXIST=0
+fi
+set -e
+
+
+# mysql -e 'CREATE DATABASE ${title} character SET utf8; GRANT ALL on ${title}.* to ${user}@localhost; FLUSH PRIVILEGES;' -uroot -p`cat /root/.passwd/db/mysql`
+
+############################################################################
+if [ "$ACTION" = "create" ]; then 
+    if [ $EXIST -eq 1 ]; then
+        echo "Database already exists"
+        exit 1
+    fi
+
+    echo "Creating database $DB_NAME"
+    COMMAND="CREATE DATABASE $DB_NAME CHARACTER SET $CHARACTER"
+    if [ -n "$USER_NAME" ]; then
+        COMMAND="$COMMAND; GRANT ALL ON $DB_NAME.* TO $USER_NAME@localhost; FLUSH PRIVILEGES;"
+    fi
+
+    echo "Executing $COMMAND"
+    mysql-do $COMMAND
+
+    COMMAND="FLUSH PRIVILEGES"
+    mysql-do $COMMAND
+
+############################################################################
+elif [ "$ACTION" = "delete" ]; then
+    if [ $EXIST -eq 0 ]; then
+        echo "Database already deleted ?"
+        exit 1
+    fi
+    echo "Deleting database $DB_NAME"
+
+    COMMAND="DROP DATABASE $DB_NAME"
+    echo "Executing $COMMAND"
+    mysql-do $COMMAND
+
+    COMMAND="FLUSH PRIVILEGES"
+    mysql-do $COMMAND
+fi
+
+exit 0

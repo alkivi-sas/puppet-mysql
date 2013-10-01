@@ -1,0 +1,128 @@
+#!/bin/sh
+
+set -e
+
+#
+#   Display help
+#
+help()
+{
+cat <<EOF
+$PROGNAME : [OPTIONS]
+  --create  user            Create user
+  --delete  user            Delete user
+  --no-password             Disable password creation
+  --help                    Print this
+
+EOF
+}
+
+
+HOST='localhost'
+PASSWORD_DIR='/root/.passwd/db'
+
+# Parse command line
+while [ "$#" -gt 0 ] ; do
+    case $1 in
+        --help)
+            help
+            exit 0
+            ;;
+        --create)
+			ACTION="create"
+			USER_NAME=$2
+            shift
+			if [ -z "$USER_NAME" ]; then
+				echo "You must specify a user when using --create"
+				exit 1
+			fi
+			;;
+        --delete)
+			ACTION="delete"
+			USER_NAME=$2
+            shift
+			if [ -z "$USER_NAME" ]; then
+				echo "You must specify a user when using --delete"
+				exit 1
+			fi
+			;;
+        --no-password)
+			NOPASS="1"
+			;;
+		*)
+            echo "Unknown option '$1'"
+            exit 1
+            ;;
+    esac
+    shift
+done
+
+
+# Check action and password for root
+if [ -z $ACTION ]; then
+	echo "You must choose an action"
+    help
+	exit 1
+fi
+
+
+# Check existence
+# mysql -e 'SHOW DATABASES LIKE \"${title}\"' -uroot -p`cat /root/.passwd/db/mysql` | grep -q ${title}
+COMMAND="SELECT user,host FROM mysql.user WHERE user = \"$USER_NAME\" AND host = \"$HOST\""
+
+set +e
+mysql-do $COMMAND | grep $USER_NAME | grep -q $HOST
+if [ $? -eq 0 ]; then
+    EXIST=1
+else
+    EXIST=0
+fi
+set -e
+
+
+
+############################################################################
+if [ "$ACTION" = "create" ]; then 
+    if [ $EXIST -eq 1 ]; then
+        echo "User already exists"
+        exit 0
+    fi
+
+    COMMAND="CREATE USER $USER_NAME@$HOST"
+
+    if [ -z $NOPASS ]; then
+        echo "Creating password"
+        PASSWORD=`genpwd --save $USER_NAME --savedir $PASSWORD_DIR --print`
+        COMMAND="$COMMAND IDENTIFIED BY '$PASSWORD'"
+    fi
+
+    mysql-do $COMMAND
+    echo "User $USER_NAME@$HOST successfully created"
+    if [ -z $NOPASS ]; then
+        echo "Password is stored in $PASSWORD_DIR/$USER_NAME"
+    fi
+
+    COMMAND="FLUSH PRIVILEGES"
+    mysql-do $COMMAND
+
+############################################################################
+elif [ "$ACTION" = "delete" ]; then
+    if [ $EXIST -eq 0 ]; then
+        echo "User already deleted ?"
+        exit 0
+    fi
+
+    COMMAND="DELETE FROM mysql.user WHERE User = \"$USER_NAME\" and Host = \"$HOST\""
+    mysql-do $COMMAND
+
+    echo "User $USER_NAME@$HOST successfully deleted"
+    PASSFILE="$PASSWORD_DIR/$USER_NAME"
+    if [ -e $PASSFILE ]; then
+        rm $PASSFILE;
+        echo "Password file $PASSFILE successfully deleted"
+    fi
+    COMMAND="FLUSH PRIVILEGES"
+    mysql-do $COMMAND
+fi
+
+exit 0

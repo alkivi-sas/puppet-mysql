@@ -1,0 +1,26 @@
+#!/bin/sh
+
+set -e
+
+#
+#   Display help
+#
+help()
+{
+cat <<EOF
+$PROGNAME : [OPTIONS]
+    Execute mysql using right credentials
+EOF
+}
+
+
+ROOT_PASSWD_FILE=/root/.passwd/db/mysql
+
+if [ ! -e $ROOT_PASSWD_FILE ]; then
+    echo "Password containing root password for mysql does not exist"
+    exit 1
+fi
+
+PASSWORD=`cat $ROOT_PASSWD_FILE`
+
+mysql -uroot -p$PASSWORD -e "$*"

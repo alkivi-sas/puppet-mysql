@@ -1,5 +1,5 @@
 name    'alkivi-mysql'
-version '0.0.2'
+version '0.0.3'
 source 'https://github.com/alkivi/puppet-mysql'
 author 'alkivi'
 license 'LGPLv3'

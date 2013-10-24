@@ -8,8 +8,9 @@ define mysql::user (
   if($password)
   {
 
-    alkivi_base::passwd { $title:
-      type   => 'db',
+    alkivi_base::passwd { "${title}-db":
+      file => $title,
+      type => 'db',
     }
 
     $mysql_password = alkivi_password('mysql', 'db')
@@ -20,7 +21,7 @@ define mysql::user (
       command  => "mysql -e \"CREATE USER ${title}@${domain} IDENTIFIED BY '${user_password}'\" -uroot -p${mysql_password}",
       provider => 'shell',
       path     => ['/bin', '/sbin', '/usr/bin' ],
-      require  => [Class['mysql'], Alkivi_base::Passwd[$title] ],
+      require  => [Class['mysql'], Alkivi_base::Passwd["${title}-db"] ],
       unless   => "mysql -u${title} -p${user_password} -e ''",
     }
   }
